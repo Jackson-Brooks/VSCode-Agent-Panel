@@ -1,0 +1,68 @@
+{
+  "name": "agent-explorer-panel",
+  "displayName": "Agent Explorer Panel",
+  "description": "An AI-agent-customizable sidebar panel for VS Code",
+  "version": "0.1.0",
+  "publisher": "antigravity",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agent-explorer",
+          "title": "Agent Panel",
+          "icon": "$(robot)"
+        }
+      ]
+    },
+    "views": {
+      "agent-explorer": [
+        {
+          "id": "agent-panel-view",
+          "type": "webview",
+          "name": "Agent Panel"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agent-panel.refresh",
+        "title": "Refresh Agent Panel",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agent-panel.openTemplate",
+        "title": "Create default agent-panel.html"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agent-panel.refresh",
+          "when": "view == agent-panel-view",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --minify",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "esbuild": "node esbuild.js",
+    "esbuild-watch": "node esbuild.js --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^18.11.18",
+    "@types/vscode": "^1.75.0",
+    "esbuild": "^0.17.5",
+    "typescript": "^4.9.4"
+  }
+}
