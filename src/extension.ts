@@ -90,10 +90,10 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
             // Directory might already exist
         }
 
-        // Generate a unique workspace identifier
-        const wsPath = workspaceRoot.fsPath;
-        const folderName = path.basename(wsPath);
-        const hash = crypto.createHash('md5').update(wsPath).digest('hex').substring(0, 8);
+        // Generate a unique workspace identifier (robust against virtual filesystems)
+        const wsKey = workspaceRoot.toString();
+        const folderName = path.basename(workspaceRoot.path) || 'workspace';
+        const hash = crypto.createHash('md5').update(wsKey).digest('hex').substring(0, 8);
         const baseName = `${folderName}-${hash}`;
 
         const htmlPath = path.join(globalDir, `${baseName}.html`);
@@ -102,8 +102,16 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         this._htmlUri = vscode.Uri.file(htmlPath);
         this._stateUri = vscode.Uri.file(statePath);
 
+        // Ensure .vscode/ parent directory exists in the workspace
+        const vscodeFolderUri = vscode.Uri.joinPath(workspaceRoot, '.vscode');
+        try {
+            await vscode.workspace.fs.createDirectory(vscodeFolderUri);
+        } catch (err) {
+            // Folder might already exist
+        }
+
         // Write/Update the .vscode/agent-panel-config.json inside workspace
-        const configUri = vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel-config.json');
+        const configUri = vscode.Uri.joinPath(vscodeFolderUri, 'agent-panel-config.json');
         const configData = {
             extension: "Agent Explorer Panel",
             htmlPath: htmlPath,
@@ -271,11 +279,11 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         </script>
         `;
 
-        // Inject script at the start of the head or body, or pre-pend if not found
-        if (html.includes('<head>')) {
-            return html.replace('<head>', `<head>${bridgeScript}`);
-        } else if (html.includes('<body>')) {
-            return html.replace('<body>', `<body>${bridgeScript}`);
+        // Inject script at the start of the head or body, using case-insensitive regex checks
+        if (/<head>/i.test(html)) {
+            return html.replace(/<head>/i, `<head>${bridgeScript}`);
+        } else if (/<body>/i.test(html)) {
+            return html.replace(/<body>/i, `<body>${bridgeScript}`);
         } else {
             return bridgeScript + html;
         }
