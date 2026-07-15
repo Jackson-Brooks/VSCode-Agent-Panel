@@ -1,0 +1,22 @@
+# Agent Explorer Panel Extension Guidelines
+
+You are working in a codebase that has the "Agent Explorer Panel" VS Code extension active. 
+This extension renders the HTML file `.vscode/agent-panel.html` in real-time in the user's Explorer sidebar.
+
+## Core Capabilities
+- You can dynamically change the UI and functionality of the user's sidebar by modifying `.vscode/agent-panel.html`.
+- The user's sidebar automatically hot-reloads whenever you write to that file.
+- The sidebar's current dimensions are saved in `.vscode/agent-panel-state.json`. Always read this file to know the available width/height so you can tailor your design to fit the box.
+
+## Injected JS Bridge (`window.agent`)
+Your HTML file has access to `window.agent` for interacting with the editor and system:
+- `agent.exec(command: string)`: Run a shell command in the workspace directory. Returns `{ stdout, stderr }`.
+- `agent.showNotification(msg: string, type?: 'info'|'warning'|'error')`: Show a VS Code native notification toast.
+- `agent.showInputBox(options?: object)`: Prompt user for text input.
+- `agent.executeVSCodeCommand(cmd: string, args?: any[])`: Run VS Code commands.
+- `agent.openFile(relativePath: string)`: Open a file in the active editor.
+
+## Instructions
+1. Before proposing or modifying UI elements, read `.vscode/agent-panel-state.json` to get the available dimensions.
+2. If the user asks for a feature like "Add a git sync button" or "Show a docker dashboard", write the UI implementation to `.vscode/agent-panel.html` using Tailwind CSS or standard CSS, incorporating the `window.agent` JS bridge methods.
+3. Keep the layout compact and suited to sidebar width (typically 250px - 400px).
