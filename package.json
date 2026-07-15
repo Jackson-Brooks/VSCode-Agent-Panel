@@ -13,17 +13,8 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "agent-explorer",
-          "title": "Agent Panel",
-          "icon": "$(robot)"
-        }
-      ]
-    },
     "views": {
-      "agent-explorer": [
+      "explorer": [
         {
           "id": "agent-panel-view",
           "type": "webview",

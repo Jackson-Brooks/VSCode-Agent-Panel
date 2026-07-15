@@ -168,6 +168,19 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     }
                 };
 
+                function sendDimensions() {
+                    vscode.postMessage({
+                        type: 'reportDimensions',
+                        width: window.innerWidth,
+                        height: window.innerHeight
+                    });
+                }
+
+                // Send dimensions immediately, on load, and on window resize
+                sendDimensions();
+                window.addEventListener('resize', sendDimensions);
+                window.addEventListener('load', sendDimensions);
+
                 window.addEventListener('message', event => {
                     const message = event.data;
                     switch (message.type) {
@@ -225,6 +238,26 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         }
 
         switch (message.type) {
+            case 'reportDimensions': {
+                const { width, height } = message;
+                const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
+                if (workspaceRoot) {
+                    const stateUri = vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel-state.json');
+                    const stateData = {
+                        width,
+                        height,
+                        lastUpdated: new Date().toISOString()
+                    };
+                    const encoder = new TextEncoder();
+                    try {
+                        await vscode.workspace.fs.writeFile(stateUri, encoder.encode(JSON.stringify(stateData, null, 2)));
+                    } catch (err) {
+                        // Ignore errors if state writing fails
+                    }
+                }
+                break;
+            }
+
             case 'exec': {
                 const { command, requestId } = message;
                 const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
