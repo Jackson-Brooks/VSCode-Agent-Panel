@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as cp from 'child_process';
+import * as os from 'os';
+import * as crypto from 'crypto';
 
 export function activate(context: vscode.ExtensionContext) {
     const provider = new AgentWebviewViewProvider(context.extensionUri);
@@ -31,10 +33,14 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'agent-panel-view';
     private _view?: vscode.WebviewView;
     private _watcher?: vscode.FileSystemWatcher;
+    
+    // Paths to the active files in ~/.vscode-agent-panel/
+    private _htmlUri?: vscode.Uri;
+    private _stateUri?: vscode.Uri;
 
     constructor(private readonly _extensionUri: vscode.Uri) {}
 
-    public resolveWebviewView(
+    public async resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
         _token: vscode.CancellationToken
@@ -49,6 +55,7 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
             ]
         };
 
+        await this.initializePathsAndConfigs();
         this.setupWatcher();
         this.updateWebviewHTML();
 
@@ -66,37 +73,82 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         this.updateWebviewHTML();
     }
 
-    private setupWatcher() {
-        if (this._watcher) {
-            this._watcher.dispose();
-        }
-
+    private async initializePathsAndConfigs() {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
         if (!workspaceRoot) {
             return;
         }
 
-        // Watch for changes to .vscode/agent-panel.html
-        const pattern = new vscode.RelativePattern(workspaceRoot, '.vscode/agent-panel.html');
-        this._watcher = vscode.workspace.createFileSystemWatcher(pattern);
+        const homeDir = os.homedir();
+        const globalDir = path.join(homeDir, '.vscode-agent-panel');
+        const globalDirUri = vscode.Uri.file(globalDir);
+
+        // Ensure ~/.vscode-agent-panel/ directory exists
+        try {
+            await vscode.workspace.fs.createDirectory(globalDirUri);
+        } catch (err) {
+            // Directory might already exist
+        }
+
+        // Generate a unique workspace identifier
+        const wsPath = workspaceRoot.fsPath;
+        const folderName = path.basename(wsPath);
+        const hash = crypto.createHash('md5').update(wsPath).digest('hex').substring(0, 8);
+        const baseName = `${folderName}-${hash}`;
+
+        const htmlPath = path.join(globalDir, `${baseName}.html`);
+        const statePath = path.join(globalDir, `${baseName}-state.json`);
+
+        this._htmlUri = vscode.Uri.file(htmlPath);
+        this._stateUri = vscode.Uri.file(statePath);
+
+        // Write/Update the .vscode/agent-panel-config.json inside workspace
+        const configUri = vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel-config.json');
+        const configData = {
+            extension: "Agent Explorer Panel",
+            htmlPath: htmlPath,
+            statePath: statePath,
+            instructions: "This project uses the Agent Explorer Panel VS Code extension. You can customize the user's sidebar UI by editing the HTML file specified in 'htmlPath'. The sidebar resizes dynamically, and its current dimensions are saved in the file specified in 'statePath'. Read the dimensions to optimize your UI layout."
+        };
+
+        const encoder = new TextEncoder();
+        try {
+            await vscode.workspace.fs.writeFile(configUri, encoder.encode(JSON.stringify(configData, null, 2)));
+        } catch (err) {
+            // Ignore config write failures (e.g. read-only folder)
+        }
+
+        // If the global HTML file doesn't exist yet, write the default template there
+        try {
+            await vscode.workspace.fs.stat(this._htmlUri);
+        } catch {
+            const template = this.getDefaultTemplateHTML();
+            await vscode.workspace.fs.writeFile(this._htmlUri, encoder.encode(template));
+        }
+    }
+
+    private setupWatcher() {
+        if (this._watcher) {
+            this._watcher.dispose();
+        }
+
+        if (!this._htmlUri) {
+            return;
+        }
+
+        // Watch the global HTML file absolute path directly
+        this._watcher = vscode.workspace.createFileSystemWatcher(this._htmlUri.fsPath);
 
         this._watcher.onDidChange(() => this.updateWebviewHTML());
         this._watcher.onDidCreate(() => this.updateWebviewHTML());
         this._watcher.onDidDelete(() => this.updateWebviewHTML());
 
-        // Watch for workspace folder changes to reinitialize the watcher if needed
-        vscode.workspace.onDidChangeWorkspaceFolders(() => {
+        // Reinitialize if workspace folders change
+        vscode.workspace.onDidChangeWorkspaceFolders(async () => {
+            await this.initializePathsAndConfigs();
             this.setupWatcher();
             this.updateWebviewHTML();
         });
-    }
-
-    private getPanelFileUri(): vscode.Uri | undefined {
-        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
-        if (!workspaceRoot) {
-            return undefined;
-        }
-        return vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel.html');
     }
 
     private async updateWebviewHTML() {
@@ -104,21 +156,18 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const fileUri = this.getPanelFileUri();
-        if (!fileUri) {
+        if (!this._htmlUri) {
             this._view.webview.html = this.getNoWorkspaceHTML();
             return;
         }
 
         try {
-            // Check if file exists using VS Code's workspace FS API (compatible with code-server & web)
             try {
-                await vscode.workspace.fs.stat(fileUri);
-                const fileBytes = await vscode.workspace.fs.readFile(fileUri);
+                await vscode.workspace.fs.stat(this._htmlUri);
+                const fileBytes = await vscode.workspace.fs.readFile(this._htmlUri);
                 const rawHtml = new TextDecoder('utf-8').decode(fileBytes);
                 this._view.webview.html = this.injectBridgeScript(rawHtml);
             } catch (statError) {
-                // File does not exist, show template setup button
                 this._view.webview.html = this.getTemplateRequiredHTML();
             }
         } catch (err: any) {
@@ -240,9 +289,7 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         switch (message.type) {
             case 'reportDimensions': {
                 const { width, height } = message;
-                const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
-                if (workspaceRoot) {
-                    const stateUri = vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel-state.json');
+                if (this._stateUri) {
                     const stateData = {
                         width,
                         height,
@@ -250,7 +297,7 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     };
                     const encoder = new TextEncoder();
                     try {
-                        await vscode.workspace.fs.writeFile(stateUri, encoder.encode(JSON.stringify(stateData, null, 2)));
+                        await vscode.workspace.fs.writeFile(this._stateUri, encoder.encode(JSON.stringify(stateData, null, 2)));
                     } catch (err) {
                         // Ignore errors if state writing fails
                     }
@@ -270,7 +317,6 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     return;
                 }
 
-                // Graceful check for non-Node environments (like pure Web worker hosts)
                 if (!cp || typeof cp.exec !== 'function') {
                     this._view.webview.postMessage({
                         type: 'execResponse',
@@ -280,7 +326,6 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     return;
                 }
 
-                // If running in a virtual filesystem (e.g. vscode.dev with virtual resources), fsPath might be empty or invalid.
                 const fsPath = workspaceRoot.fsPath;
                 if (!fsPath) {
                     this._view.webview.postMessage({
@@ -369,22 +414,19 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
     }
 
     public async createDefaultTemplate() {
-        const fileUri = this.getPanelFileUri();
-        if (!fileUri) {
+        if (!this._htmlUri) {
             vscode.window.showErrorMessage('Please open a workspace before creating the template.');
             return;
         }
 
         try {
-            await vscode.workspace.fs.stat(fileUri);
+            await vscode.workspace.fs.stat(this._htmlUri);
             const openChoice = await vscode.window.showWarningMessage(
-                '.vscode/agent-panel.html already exists. Do you want to overwrite it?',
+                'Custom agent HTML already exists. Do you want to overwrite it?',
                 'Yes',
                 'No'
             );
             if (openChoice !== 'Yes') {
-                const doc = await vscode.workspace.openTextDocument(fileUri);
-                await vscode.window.showTextDocument(doc);
                 return;
             }
         } catch {
@@ -394,11 +436,8 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         const template = this.getDefaultTemplateHTML();
         const encoder = new TextEncoder();
         try {
-            await vscode.workspace.fs.writeFile(fileUri, encoder.encode(template));
-            vscode.window.showInformationMessage('Created default template in .vscode/agent-panel.html!');
-            
-            const doc = await vscode.workspace.openTextDocument(fileUri);
-            await vscode.window.showTextDocument(doc);
+            await vscode.workspace.fs.writeFile(this._htmlUri, encoder.encode(template));
+            vscode.window.showInformationMessage('Created default template in global storage!');
             this.updateWebviewHTML();
         } catch (writeErr: any) {
             vscode.window.showErrorMessage(`Failed to write template: ${writeErr.message}`);
@@ -481,13 +520,6 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     button:hover {
                         background-color: var(--vscode-button-hoverBackground, #0062a3);
                     }
-                    code {
-                        background: rgba(0, 0, 0, 0.3);
-                        padding: 2px 4px;
-                        border-radius: 4px;
-                        font-family: var(--vscode-editor-font-family, monospace);
-                        font-size: 12px;
-                    }
                     @keyframes bounce {
                         0%, 100% { transform: translateY(0); }
                         50% { transform: translateY(-6px); }
@@ -499,8 +531,7 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     <div class="icon">🤖</div>
                     <h3>Setup Panel HTML</h3>
                     <p>
-                        This view displays the contents of <code>.vscode/agent-panel.html</code>.
-                        Create this file in your project or generate a default one to begin.
+                        The custom panel HTML was not found. Please click below to generate a default template.
                     </p>
                     <button onclick="agent.createTemplate()">Create Default Template</button>
                 </div>
@@ -859,7 +890,7 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
     <div class="section">
         <div class="section-title">ℹ️ System Info</div>
         <div style="font-size: 11px; opacity: 0.8; line-height: 1.4;">
-            Modify this UI by asking your AI agent to change <code>.vscode/agent-panel.html</code>.
+            Modify this UI by updating the HTML file specified in your <code>.vscode/agent-panel-config.json</code>.
         </div>
         <div class="badge-list">
             <span class="badge">Ctrl+Shift+P</span>
