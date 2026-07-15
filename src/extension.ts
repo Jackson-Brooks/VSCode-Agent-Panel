@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
 import * as path from 'path';
 import * as cp from 'child_process';
 
@@ -92,13 +91,12 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         });
     }
 
-    private getPanelFilePath(): { uri: vscode.Uri; fsPath: string } | undefined {
+    private getPanelFileUri(): vscode.Uri | undefined {
         const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
         if (!workspaceRoot) {
             return undefined;
         }
-        const fileUri = vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel.html');
-        return { uri: fileUri, fsPath: fileUri.fsPath };
+        return vscode.Uri.joinPath(workspaceRoot, '.vscode', 'agent-panel.html');
     }
 
     private async updateWebviewHTML() {
@@ -106,17 +104,21 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
             return;
         }
 
-        const fileInfo = this.getPanelFilePath();
-        if (!fileInfo) {
+        const fileUri = this.getPanelFileUri();
+        if (!fileUri) {
             this._view.webview.html = this.getNoWorkspaceHTML();
             return;
         }
 
         try {
-            if (fs.existsSync(fileInfo.fsPath)) {
-                const rawHtml = fs.readFileSync(fileInfo.fsPath, 'utf8');
+            // Check if file exists using VS Code's workspace FS API (compatible with code-server & web)
+            try {
+                await vscode.workspace.fs.stat(fileUri);
+                const fileBytes = await vscode.workspace.fs.readFile(fileUri);
+                const rawHtml = new TextDecoder('utf-8').decode(fileBytes);
                 this._view.webview.html = this.injectBridgeScript(rawHtml);
-            } else {
+            } catch (statError) {
+                // File does not exist, show template setup button
                 this._view.webview.html = this.getTemplateRequiredHTML();
             }
         } catch (err: any) {
@@ -225,7 +227,7 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
         switch (message.type) {
             case 'exec': {
                 const { command, requestId } = message;
-                const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+                const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri;
                 if (!workspaceRoot) {
                     this._view.webview.postMessage({
                         type: 'execResponse',
@@ -235,7 +237,28 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
                     return;
                 }
 
-                cp.exec(command, { cwd: workspaceRoot }, (error, stdout, stderr) => {
+                // Graceful check for non-Node environments (like pure Web worker hosts)
+                if (!cp || typeof cp.exec !== 'function') {
+                    this._view.webview.postMessage({
+                        type: 'execResponse',
+                        requestId,
+                        error: 'Terminal command execution (child_process) is not supported in this environment.'
+                    });
+                    return;
+                }
+
+                // If running in a virtual filesystem (e.g. vscode.dev with virtual resources), fsPath might be empty or invalid.
+                const fsPath = workspaceRoot.fsPath;
+                if (!fsPath) {
+                    this._view.webview.postMessage({
+                        type: 'execResponse',
+                        requestId,
+                        error: 'Workspace is not stored on a local or remote accessible filesystem.'
+                    });
+                    return;
+                }
+
+                cp.exec(command, { cwd: fsPath }, (error, stdout, stderr) => {
                     this._view.webview.postMessage({
                         type: 'execResponse',
                         requestId,
@@ -313,37 +336,40 @@ class AgentWebviewViewProvider implements vscode.WebviewViewProvider {
     }
 
     public async createDefaultTemplate() {
-        const fileInfo = this.getPanelFilePath();
-        if (!fileInfo) {
+        const fileUri = this.getPanelFileUri();
+        if (!fileUri) {
             vscode.window.showErrorMessage('Please open a workspace before creating the template.');
             return;
         }
 
-        const dirPath = path.dirname(fileInfo.fsPath);
-        if (!fs.existsSync(dirPath)) {
-            fs.mkdirSync(dirPath, { recursive: true });
-        }
-
-        if (fs.existsSync(fileInfo.fsPath)) {
+        try {
+            await vscode.workspace.fs.stat(fileUri);
             const openChoice = await vscode.window.showWarningMessage(
                 '.vscode/agent-panel.html already exists. Do you want to overwrite it?',
                 'Yes',
                 'No'
             );
             if (openChoice !== 'Yes') {
-                const doc = await vscode.workspace.openTextDocument(fileInfo.uri);
+                const doc = await vscode.workspace.openTextDocument(fileUri);
                 await vscode.window.showTextDocument(doc);
                 return;
             }
+        } catch {
+            // File does not exist, proceed to write
         }
 
         const template = this.getDefaultTemplateHTML();
-        fs.writeFileSync(fileInfo.fsPath, template, 'utf8');
-        vscode.window.showInformationMessage('Created default template in .vscode/agent-panel.html!');
-        
-        const doc = await vscode.workspace.openTextDocument(fileInfo.uri);
-        await vscode.window.showTextDocument(doc);
-        this.updateWebviewHTML();
+        const encoder = new TextEncoder();
+        try {
+            await vscode.workspace.fs.writeFile(fileUri, encoder.encode(template));
+            vscode.window.showInformationMessage('Created default template in .vscode/agent-panel.html!');
+            
+            const doc = await vscode.workspace.openTextDocument(fileUri);
+            await vscode.window.showTextDocument(doc);
+            this.updateWebviewHTML();
+        } catch (writeErr: any) {
+            vscode.window.showErrorMessage(`Failed to write template: ${writeErr.message}`);
+        }
     }
 
     private getNoWorkspaceHTML(): string {
