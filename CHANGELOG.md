@@ -2,6 +2,13 @@
 
 All notable changes to the "Custom Agent Panel" extension will be documented in this file.
 
+## 0.1.1
+
+- **Security & Quality Updates**
+- **Workspace Trust Enforcement**: Automatically block command execution and template writes in untrusted workspaces.
+- **Path Traversal Protection**: Guard files written or opened via the bridge API from directory traversal.
+- **Robot Icon View**: Use a theme-aware robot Codicon when the view is placed in the Activity Bar.
+
 ## 0.1.0
 
 - **Initial Public Release**
