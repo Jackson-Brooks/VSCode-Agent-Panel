@@ -1,4 +1,4 @@
-# Agent Explorer Panel
+# Custom Agent Panel
 
 An AI-agent-customizable sidebar panel for VS Code. This extension renders the contents of `.vscode/agent-panel.html` directly in the VS Code sidebar and reloads it in real-time when the file changes. 
 
@@ -19,19 +19,20 @@ And the agent will write the HTML, CSS, and JS to `.vscode/agent-panel.html`, up
 ## How to Test and Run
 
 1. **Open this project in VS Code:**
-   Make sure you are in this folder (`/home/claw/projects/personal/vscode-custom-extension`).
+   Open the extension directory in VS Code.
 
 2. **Launch Extension Development Host:**
    - Press **`F5`** (or go to `Run and Debug` in the sidebar and click **Start Debugging**).
    - This opens a new window called **[Extension Development Host]**.
 
 3. **Open a Workspace:**
-   - In the new [Extension Development Host] window, open any folder (you can open this same `/home/claw/projects/personal/vscode-custom-extension` folder to test the Git management UI).
+   - In the new [Extension Development Host] window, open any folder (you can open the same extension folder to test the dashboard).
 
 4. **Open the Agent Panel:**
-   - Look at the Activity Bar on the far left. You should see a Robot icon (`🤖`).
-   - Click it to open the **Agent Panel**.
-   - You will see the default Git Management and Terminal Sandbox dashboard!
+   - Click the **Explorer** icon in the Activity Bar on the far left (the files/folders icon).
+   - Find the **Agent Panel** collapsible section (usually at the bottom of the Explorer sidebar) and expand it.
+   - You will see the default User Guide & Live API Reference dashboard!
+   - *(Optional)* Drag the "Agent Panel" title header to the Activity Bar on the far left to make it a standalone tab.
 
 5. **Test AI Agent Dynamic Changes:**
    - With both windows open, edit `.vscode/agent-panel.html` in your main window (or ask me to edit it).
@@ -45,20 +46,32 @@ And the agent will write the HTML, CSS, and JS to `.vscode/agent-panel.html`, up
 The extension automatically injects a script into `.vscode/agent-panel.html` providing a `window.agent` global object:
 
 ### 1. `window.agent.exec(command: string): Promise<{ stdout: string, stderr: string }>`
-Runs a terminal command in the workspace directory.
+Runs a background shell command in the workspace directory.
 ```javascript
 const result = await agent.exec("git status -s");
 console.log(result.stdout);
 ```
 
-### 2. `window.agent.showNotification(message: string, type?: 'info' | 'warning' | 'error')`
+### 2. `window.agent.runInTerminal(command: string)`
+Spawns a new native, interactive VS Code Terminal instance inside the IDE and executes the command.
+```javascript
+agent.runInTerminal("npm run dev");
+```
+
+### 3. `window.agent.writeFile(relativePath: string, content: string): Promise<void>`
+Safely writes a file in the workspace directory (creating nested parent directories if needed) without using command shells.
+```javascript
+await agent.writeFile(".vscode/notes/log.txt", "Hello World");
+```
+
+### 4. `window.agent.showNotification(message: string, type?: 'info' | 'warning' | 'error')`
 Shows a native VS Code toaster notification.
 ```javascript
 agent.showNotification("Operation completed successfully!");
 agent.showNotification("An error occurred!", "error");
 ```
 
-### 3. `window.agent.showInputBox(options?: object): Promise<string | undefined>`
+### 5. `window.agent.showInputBox(options?: object): Promise<string | undefined>`
 Opens a VS Code text input prompt.
 ```javascript
 const commitMessage = await agent.showInputBox({
@@ -67,14 +80,14 @@ const commitMessage = await agent.showInputBox({
 });
 ```
 
-### 4. `window.agent.executeVSCodeCommand(commandName: string, args?: any[]): Promise<any>`
+### 6. `window.agent.executeVSCodeCommand(commandName: string, args?: any[]): Promise<any>`
 Triggers any registered VS Code command.
 ```javascript
 // Open settings
 await agent.executeVSCodeCommand("workbench.action.openSettings");
 ```
 
-### 5. `window.agent.openFile(relativePath: string)`
+### 7. `window.agent.openFile(relativePath: string)`
 Opens a file in the active editor pane.
 ```javascript
 agent.openFile("package.json");

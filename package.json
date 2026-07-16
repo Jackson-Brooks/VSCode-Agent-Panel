@@ -1,9 +1,27 @@
 {
-  "name": "agent-explorer-panel",
-  "displayName": "Agent Explorer Panel",
+  "name": "custom-agent-panel",
+  "displayName": "Custom Agent Panel",
   "description": "An AI-agent-customizable sidebar panel for VS Code",
   "version": "0.1.0",
-  "publisher": "antigravity",
+  "publisher": "jackson-brooks",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jackson-Brooks/VSCode-Agent-Panel.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Jackson-Brooks/VSCode-Agent-Panel/issues"
+  },
+  "homepage": "https://github.com/Jackson-Brooks/VSCode-Agent-Panel#readme",
+  "icon": "media/icon.png",
+  "keywords": [
+    "ai",
+    "agent",
+    "webview",
+    "sidebar",
+    "customizable",
+    "developer tools"
+  ],
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -18,14 +36,15 @@
         {
           "id": "agent-panel-view",
           "type": "webview",
-          "name": "Agent Panel"
+          "name": "Custom Agent Panel",
+          "icon": "$(robot)"
         }
       ]
     },
     "commands": [
       {
         "command": "agent-panel.refresh",
-        "title": "Refresh Agent Panel",
+        "title": "Refresh Custom Agent Panel",
         "icon": "$(refresh)"
       },
       {
@@ -41,6 +60,13 @@
           "group": "navigation"
         }
       ]
+    }
+  },
+  "capabilities": {
+    "virtualWorkspaces": false,
+    "workspaceTrust": {
+      "supported": "restricted",
+      "description": "Executing background commands and terminal scripts requires workspace trust."
     }
   },
   "scripts": {
