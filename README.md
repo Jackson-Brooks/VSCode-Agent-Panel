@@ -16,28 +16,23 @@ And the agent will write the HTML, CSS, and JS to `.vscode/agent-panel.html`, up
 
 ---
 
-## How to Test and Run
+## How to Use
 
-1. **Open this project in VS Code:**
-   Open the extension directory in VS Code.
+1. **Install the Extension:**
+   Install the **Custom Agent Panel** extension from the VS Code Marketplace.
 
-2. **Launch Extension Development Host:**
-   - Press **`F5`** (or go to `Run and Debug` in the sidebar and click **Start Debugging**).
-   - This opens a new window called **[Extension Development Host]**.
+2. **Open a Workspace:**
+   Open any folder or workspace in VS Code.
 
-3. **Open a Workspace:**
-   - In the new [Extension Development Host] window, open any folder (you can open the same extension folder to test the dashboard).
-
-4. **Open the Agent Panel:**
+3. **Reveal the Panel:**
    - Click the **Explorer** icon in the Activity Bar on the far left (the files/folders icon).
-   - Find the **Agent Panel** collapsible section (usually at the bottom of the Explorer sidebar) and expand it.
-   - You will see the default User Guide & Live API Reference dashboard!
-   - *(Optional)* Drag the "Agent Panel" title header to the Activity Bar on the far left to make it a standalone tab.
+   - Find the **Custom Agent Panel** collapsible section (usually at the bottom of the Explorer sidebar) and click to expand it.
+   - Click **Create Default Template** if prompted. You will immediately see the interactive User Guide & API Sandbox!
+   - *(Optional)* Drag the "Custom Agent Panel" title header to the Activity Bar on the far left to make it a standalone tab.
 
-5. **Test AI Agent Dynamic Changes:**
-   - With both windows open, edit `.vscode/agent-panel.html` in your main window (or ask me to edit it).
-   - Save the file.
-   - Watch the panel in the [Extension Development Host] window reload **instantly** with the new content and style!
+4. **Customize Your Sidebar:**
+   - Any modifications you make to the `.vscode/agent-panel.html` file in your workspace will reload in the sidebar **instantly** on save!
+   - You can edit this file yourself, or ask your AI assistant to update the HTML/CSS/JS for you!
 
 ---
 
