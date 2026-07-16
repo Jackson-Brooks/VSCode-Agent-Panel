@@ -2,7 +2,7 @@
   "name": "agent-explorer-panel",
   "displayName": "Custom Agent Panel",
   "description": "An AI-agent-customizable sidebar panel for VS Code",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "jackson-brooks",
   "license": "MIT",
   "repository": {
@@ -36,7 +36,7 @@
         {
           "id": "custom-agent-panel-container",
           "title": "Custom Agent Panel",
-          "icon": "media/icon.png"
+          "icon": "media/icon.svg"
         }
       ]
     },
